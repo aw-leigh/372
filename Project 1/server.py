@@ -1,8 +1,10 @@
+#!/usr/bin/env python
+
 # references: https://www.binarytides.com/python-socket-programming-tutorial/
 # references: https://shakeelosmani.wordpress.com/2015/04/13/python-3-socket-programming-example/
 
 import socket   # sockets
-import sys      # exit
+import sys      # exit, write
 
 if len(sys.argv) != 2:
     print("Please enter a port number")
@@ -29,21 +31,20 @@ while True:
     if ('\\quit' in data):  # unless client says quit, print the recieved message
         break
     else:
-        print(data, end="") # remove trailing newline
+        sys.stdout.write(data) # remove trailing newline
 
     # REPLY
-    reply = input("> ")
+    reply = raw_input(serverHandle)
 
     while (len(reply) > 500 or len(reply) < 1):
-        print("Your message must be 1-500 characters in length")
-        reply = input("> ")
-
-    if ('\\quit' in reply):  # unless server says quit, send message
-        break
+        sys.stdout.write("Your message must be 1-500 characters in length")
+        reply = raw_input("> ")
 
     reply = serverHandle + reply + '\n'
-
     connection.sendall(reply.encode())
+    
+    if ('\\quit' in reply):  # unless server says quit, send message
+        break
 
 connection.close()
 s.close()
