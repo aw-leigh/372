@@ -22,7 +22,7 @@ s.bind((HOST, PORT))
 s.listen(1)  # listen for 1 processes at a time only
 
 connection, address = s.accept()
-# print('Connected with ' + address[0] + ':' + str(address[1]))
+print('Connected with ' + address[0] + ':' + str(address[1]))
 
 while True:
     data = connection.recv(1024).decode()
