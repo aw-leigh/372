@@ -1,11 +1,18 @@
 #!/usr/bin/env python
 
+# Andrew Wilson (wilsoan6) CS 372 Project 1
+# Simple chat server with socket programming
+# Last modified: 7/26/2019
+
 # references: https://www.binarytides.com/python-socket-programming-tutorial/
 # references: https://shakeelosmani.wordpress.com/2015/04/13/python-3-socket-programming-example/
 
 import socket   # sockets
 import sys      # exit, write
 
+# Sets up TCP connection
+# Pre: argv1 must be a port number
+# Post: socket is set up
 def setupConection():
     HOST = ''                   # all available interfaces
     PORT = int(sys.argv[1])     # user-specified port
@@ -16,6 +23,9 @@ def setupConection():
     s.bind((HOST, PORT))
     return s;
 
+# Recieves message from remote host
+# Pre: Must have connection with remote host
+# Post: Message from remote host is printed to stdout
 def recieveMessage():
     data = connection.recv(1024).decode()
 
@@ -25,6 +35,9 @@ def recieveMessage():
 
     return data;
 
+# Sends message to remote host
+# Pre: Must be connected to remote host
+# Post: String message is sent to remote host
 def sendMessage():
     serverHandle = 'Serverer> ' # hardcoded handle    
     reply = raw_input(serverHandle)

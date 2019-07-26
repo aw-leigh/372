@@ -1,6 +1,6 @@
 /* Andrew Wilson (wilsoan6) CS 372 Project 1
  * Simple chat client with socket programming
- * Last modified; 7/26/2019
+ * Last modified: 7/26/2019
  */
 
 
