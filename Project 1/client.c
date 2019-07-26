@@ -6,17 +6,14 @@
 #include <stdlib.h>
 #include <netinet/in.h> //For the AF_INET (Address Family)
 
-void clear_stdin(void){
-    int c = getchar();
-    while (c != EOF && c != '\n')
-        c = getchar();
-}
+void clear_stdin(void);
+void getHandle(* char[]);
+void setupConnection(int * fd, struct sockaddr_in * chatServer)
 
 int main(int argc, char *argv[]){
 
     struct sockaddr_in chatServer; //main socket to store server details
     int fd; //file descriptor that is used to idenfiy the socket
-    int connection; //connection file descriptor
     char message[501]; 
     char messageWithHandle[511]; 
     char clientHandle[11]; 
@@ -29,22 +26,10 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
-    printf("Please enter a handle of up to 10 characters: ");
-    scanf("%s", clientHandle);
-    clear_stdin(); //remove newline in stdin
+    getHandle(&clientHandle);
 
-    //create an create an AF_INET (IPv4), STREAM socket (TCP)
-    fd = socket(AF_INET, SOCK_STREAM, 0); 
-    if(fd < 0)
-    {
-        perror("Client Error: Socket not created succesfully");
-        exit(1);
-    }
+    setupConnection(&fd, &chatServer);
 
-    chatServer.sin_family = AF_INET;
-    chatServer.sin_port = htons(atoi(argv[2])); //user specified port
-
-    inet_pton(AF_INET, argv[1], &chatServer.sin_addr); //change from localhost later
     connect(fd, (struct sockaddr *)&chatServer, sizeof(chatServer));
 
     while(1) {
@@ -76,4 +61,31 @@ int main(int argc, char *argv[]){
     
     close(fd);
 	return 0;
+}
+
+void clear_stdin(void){
+    int c = getchar();
+    while (c != EOF && c != '\n')
+        c = getchar();
+}
+
+void getHandle(* char[] clientHandle){
+
+    printf("Please enter a handle of up to 10 characters: ");
+    scanf("%s", *clientHandle);
+    clear_stdin(); //remove newline in stdin
+}
+
+void setupConnection(int * fd, struct sockaddr_in * chatServer){
+    //create an create an AF_INET (IPv4), STREAM socket (TCP)
+    *fd = socket(AF_INET, SOCK_STREAM, 0); 
+    if(*fd < 0)
+    {
+        perror("Client Error: Socket not created succesfully");
+        exit(1);
+    }
+
+    chatServer->sin_family = AF_INET;
+    chatServer->sin_port = htons(atoi(argv[2])); //user specified port
+    inet_pton(AF_INET, argv[1], &chatServer.sin_addr); //user specified host name    
 }
