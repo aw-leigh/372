@@ -6,34 +6,27 @@
 import socket   # sockets
 import sys      # exit, write
 
-if len(sys.argv) != 2:
-    print("Please enter a port number")
-    print("Use: server.py PORTNUMBER")
-    exit(1)
+def setupConection():
+    HOST = ''                   # all available interfaces
+    PORT = int(sys.argv[1])     # user-specified port
 
-HOST = ''                   # all available interfaces
-PORT = int(sys.argv[1])     # user-specified port
-serverHandle = 'Serverer> ' # hardcoded handle
+    # create an AF_INET (IPv4), STREAM socket (TCP)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# create an AF_INET (IPv4), STREAM socket (TCP)
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((HOST, PORT))
+    return s;
 
-s.bind((HOST, PORT))
-s.listen(1)  # listen for 1 processes at a time only
-
-connection, address = s.accept()
-print('Connected with ' + address[0] + ':' + str(address[1]))
-
-while True:
+def recieveMessage():
     data = connection.recv(1024).decode()
 
     # READ
-    if ('\\quit' in data):  # unless client says quit, print the recieved message
-        break
-    else:
+    if ('\\quit' not in data):  # unless client says quit, print the recieved message
         sys.stdout.write(data) # remove trailing newline
 
-    # REPLY
+    return data;
+
+def sendMessage():
+    serverHandle = 'Serverer> ' # hardcoded handle    
     reply = raw_input(serverHandle)
 
     while (len(reply) > 500 or len(reply) < 1):
@@ -42,10 +35,35 @@ while True:
 
     reply = serverHandle + reply + '\n'
     connection.sendall(reply.encode())
-    
-    if ('\\quit' in reply):  # unless server says quit, send message
-        break
 
-connection.close()
+    return reply;
+
+####################
+### MAIN PROGRAM ###
+####################
+
+if len(sys.argv) != 2:
+    print("Please enter a port number")
+    print("Use: server.py PORTNUMBER")
+    exit(1)
+
+s = setupConection()
+
+while True:
+    s.listen(1)  # listen for 1 processes at a time only
+    connection, address = s.accept()
+
+    while True:
+        # READ
+        data = recieveMessage()
+        if ('\\quit' in data):  # unless client says quit, print the recieved message
+            break
+
+        # REPLY
+        reply = sendMessage()       
+        if ('\\quit' in reply):  # unless server says quit, send message
+            break
+
+    connection.close()
 s.close()
 exit(0)

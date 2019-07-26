@@ -1,4 +1,13 @@
+/* Andrew Wilson (wilsoan6) CS 372 Project 1
+ * Simple chat client with socket programming
+ * Last modified; 7/26/2019
+ */
+
+
+
 //reference https://medium.com/@yashitmaheshwary/simple-chat-server-using-sockets-in-c-f72fc8b5b24e
+
+
 
 #include <stdio.h>
 #include <string.h>
