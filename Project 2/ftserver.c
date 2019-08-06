@@ -14,7 +14,7 @@
 #include <netinet/in.h> //For the AF_INET (Address Family)
 #include <dirent.h> //for directory listing
 
-void setupConnection(int * fd, char * port){
+void setupServer(int * fd, char * port){
 
     //the following function is taken mostly directly from Beej's guide:
     struct addrinfo hints;
@@ -43,6 +43,19 @@ void setupConnection(int * fd, char * port){
     }
 }
 
+void setupClientConnection (int argc, char *argv[], int * fd){
+    struct sockaddr_in chatServer; //main socket to store server details
+
+    //create an create an AF_INET (IPv4), STREAM socket (TCP)
+    *fd = socket(AF_INET, SOCK_STREAM, 0); 
+
+    chatServer.sin_family = AF_INET;
+    chatServer.sin_port = htons(atoi(argv[2])); //user specified port
+
+    inet_pton(AF_INET, argv[1], &chatServer.sin_addr); //user specified host name
+    connect(*fd, (struct sockaddr *)&chatServer, sizeof(chatServer));
+}
+
 // adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
 void printDirectoryContentsToString(char contents[]){
     struct dirent *de; // Pointer for directory entry
@@ -54,7 +67,7 @@ void printDirectoryContentsToString(char contents[]){
     if (dr == NULL) // opendir returns NULL if couldn't open directory
     {
         printf("Could not open current directory");
-        return 0;
+        exit(1);
     }
 
     // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html for readdir()
@@ -73,28 +86,26 @@ void printDirectoryContentsToString(char contents[]){
 
 void sendDirectoryContents(){
     char contents[1000];
-    memset(contents, "\0", 1000);
+    memset(contents, '\0', sizeof(contents));
     int bytesSent, messageLength;
 
     printDirectoryContentsToString(contents);
     messageLength = strlen(contents);
 
-    bytesSent = send(, contents, messageLength, 0);
+    //bytesSent = send(, contents, messageLength, 0);
 
 }
 
-void handleRequest(int controlConnectionFD){
+void handleRequest(int controlConnectionFD, char * clientHost){
     int dataConnectionFD;
     struct sockaddr_storage dataAddress;
     socklen_t dataAdrSize;
     char buffer[1028];
-    char clientPort [128];
     char * commands[5]; //used to store commands from client. There should be a max of 3, but added extra just to be safe
     int numCommands = 0;
     char * token;
 
-    memset(buffer, "\0", sizeof(buffer));
-    memset(clientPort, "\0", sizeof(clientPort));
+    memset(buffer, '\0', sizeof(buffer));
 
     //recieve commands from client into buffer
     recv(controlConnectionFD, buffer, sizeof(buffer), 0);
@@ -108,15 +119,17 @@ void handleRequest(int controlConnectionFD){
         numCommands++;
         token = strtok(NULL, " ");
     }
+    commands[4] = clientHost; //add hostname to last place in commands array
 
     if(strcmp(commands[0], "-l") == 0){
         // printf("List directory requested on port %d", clientPort);
         // printf("Sending directory contents to %s:%d", clientHost, clientPort);
-        strcopy(clientPort, commands[1]); //commands should be "-l <port>"
+        //commands should be "-l <port>"
+        printf("Sending directory contents to %s:%s\n", commands[4], commands[1]);
         sendDirectoryContents();
     }
-    else if( strcmp(commands[0], "-g")==0){
-        strcopy(clientPort, commands[2]); //commands should be "-g <filename> <port>"
+    else if(strcmp(commands[0], "-g")==0){
+        strcpy(clientPort, commands[2]); //commands should be "-g <filename> <port>"
         //send file
     }
     else{
@@ -131,22 +144,31 @@ int main(int argc, char *argv[]){
     int serverFD, controlConnectionFD; //file descriptor that is used to idenfiy the socket
     struct sockaddr_storage controlAddress; //for storing connection info
     socklen_t ctrlAdrSize;
+    char clientHost[128];
+    char clientPort[16];
+    char *token;
 
 
 	if(argc != 2) {
-		fprintf(stderr, "Usage: $ /ftserver <port>");
+		fprintf(stderr, "Usage: $ /ftserver <port>\n");
 		exit(1);
 	}
 
-    setupConnection(&serverFD, argv[1]);
+    setupServer(&serverFD, argv[1]);
     printf("Server open on port %s\n", argv[1]);
 
     //main server loop
     while(1){
+        //accept connection
         ctrlAdrSize = sizeof(controlAddress);
         controlConnectionFD = accept(serverFD, (struct sockaddr *)&controlAddress, &ctrlAdrSize);
-        printf("Connection from somewhere");
+        
+        //extract & print the hostname
+        getnameinfo((struct sockaddr *)&controlAddress, ctrlAdrSize, clientHost, 128, clientPort, 16, 0);
+        token = strtok(clientHost, ".");
+        strcpy(clientHost, token);
+        printf("Connection from %s\n", clientHost);
 
-        handleRequest(controlConnectionFD);
+        handleRequest(controlConnectionFD, clientHost);
     }
 }
