@@ -155,7 +155,8 @@ void sendFile(char *commands[])
 }
 
 // opens connection to remote, sends error message, and closes connection
-void sendError(char * host, char * port, char errorCode[]){
+void sendError(char *host, char *port, char errorCode[])
+{
     int dataConnectionFD;
     char *errorMessage = errorCode;
 
@@ -164,14 +165,19 @@ void sendError(char * host, char * port, char errorCode[]){
     close(dataConnectionFD);
 }
 
+// main logic for handling requests. It will parse input and send a directory listing,
+// file, or error to client.
+// Pre: Need control connection with client established
+// Post: Connection has been made, data sent, and connection closed.
 void handleRequest(int controlConnectionFD, char *clientHost, char directoryContents[])
 {
     char buffer[1028];
-    char *commands[5]; //used to store commands from client. There should be a max of 3, but added extra just to be safe
+    char *commands[5]; //used to store commands from client
     int numCommands = 0;
     char *token;
 
     memset(buffer, '\0', sizeof(buffer));
+    memset(commands, '\0', sizeof(commands));
 
     //recieve commands from client into buffer
     recv(controlConnectionFD, buffer, sizeof(buffer), 0);
@@ -200,8 +206,15 @@ void handleRequest(int controlConnectionFD, char *clientHost, char directoryCont
         // returns NULL if substring isn't found
         if (strstr(directoryContents, commands[1]) == NULL)
         {
-            printf("File not found\n");
-            sendError(commands[4], commands[2], "-1");
+            printf("File not found. Sending error to client.\n");
+            if (commands[2] == NULL)
+            {
+                sendError(commands[4], commands[1], "-1");
+            }
+            else
+            {
+                sendError(commands[4], commands[2], "-1");
+            }
         }
         else
         {
@@ -209,9 +222,17 @@ void handleRequest(int controlConnectionFD, char *clientHost, char directoryCont
             sendFile(commands);
         }
     }
-    else
+    else //command not recognized
     {
-        sendError(commands[4], commands[2], "-2");
+        printf("Command not recognized. Sending error to client.\n");
+        if (commands[2] == NULL)
+            {
+                sendError(commands[4], commands[1], "-2");
+            }
+            else
+            {
+                sendError(commands[4], commands[2], "-2");
+            }
     }
     close(controlConnectionFD);
 }
@@ -236,8 +257,9 @@ int main(int argc, char *argv[])
     setupServer(&serverFD, argv[1]);
     printf("Server open on port %s\n", argv[1]);
 
-    // this used to be a subfunction of handleRequest, but it was causing file transfers to hang for some reason
-    // everything works when it's in main, so in main it will remain
+    // this used to be a subfunction of handleRequest, and I used dynamic lookup instead of printing to string,
+    // but it was causing file transfers to hang for some reason.
+    // Everything works when it's in main, so in main it will remain
     memset(directoryContents, '\0', sizeof(directoryContents));
     printDirectoryContentsToString(directoryContents);
 

@@ -9,6 +9,14 @@
 
 import socket   # sockets
 import sys      # exit, write
+import os.path  # check directory contents
+
+def overwriteFileCheck():
+    if(len(sys.argv) == 6): # if we are requesting a file with -g
+        if os.path.exists("./" + sys.argv[4]): # if a file with that name exists in directory
+            reply = raw_input("Overwrite "+ sys.argv[4] + "? (y/n)")
+            if(reply == "n" or reply == "N"):
+                exit(0)
 
 # Sets up TCP socket for recieving data from server
 # Pre: argv1 must be a port number
@@ -52,10 +60,21 @@ def connectToServer():
 
     return s
 
-# Recieves message from remote host
+# Connects to remote host and sends message based on cli arguments
+# Pre: CLI arguments must be as specified
+# Post: Message sent to server
+def makeRequest():
+    if(len(sys.argv) == 5): #-l
+        message = sys.argv[3] + " " + sys.argv[4]
+    else: #-g
+        message = sys.argv[3] + " " + sys.argv[4] + " " + sys.argv[5]
+    
+    serverSocket.sendall(message)
+
+# Recieves data from remote host
 # Pre: Must have connection with remote host
-# Post: Message from remote host is printed to stdout
-def recieveMessage():
+# Post: Data from remote host is printed to stdout or saved to file depending on command
+def recieveData():
     data = connection.recv(1024)
 
     if (data == "-1"):
@@ -63,11 +82,11 @@ def recieveMessage():
     elif (data == "-2"):
         print(sys.argv[1] + ":" + sys.argv[2] + "says: " + "\nError: Command not recognized\n")
     elif(len(sys.argv) == 5): #-l
-        sys.stdout.write(data) # remove trailing newline
+        sys.stdout.write(data) # print directory contents
     else: #-d
-        print("Receiving file data")
+        print("Receiving file data") # save file
 
-        f = open("file.txt","w") #open in binary
+        f = open("file.txt","w")
         while (data):
                 f.write(data)
                 data = connection.recv(1024)
@@ -82,23 +101,21 @@ if (len(sys.argv) < 5 or len(sys.argv) > 6):
     print("Use: ftclient.py <SERVER_HOST> <SERVER_PORT> <COMMAND> (<FILENAME>) <DATA_PORT>")
     exit(1)
 
+# check if file exists and prompt to overwrite
+overwriteFileCheck()
+
 dataSocket = setupDataPort()
 serverSocket = connectToServer()
 
 # send request to server
-if(len(sys.argv) == 5): #-l
-    message = sys.argv[3] + " " + sys.argv[4]
-else: #-g
-    message = sys.argv[3] + " " + sys.argv[4] + " " + sys.argv[5]
-
-serverSocket.sendall(message)
+makeRequest()
 
 # setup data port to revieve reply
 while True:
     dataSocket.listen(1)  # listen for 1 processes at a time only
     connection, address = dataSocket.accept()
 
-    recieveMessage()
+    recieveData()
     connection.close()
     break
 
