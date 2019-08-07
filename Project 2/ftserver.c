@@ -68,6 +68,33 @@ void setupClientConnection(char *host, char *port, int *fd)
 }
 
 // adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
+// Pre: needs a string with filename with extension
+// Post: returns 0 if file is found in current directory, -1 if not
+int serachDirectoryForFile(char* filename){
+
+    struct dirent *de;  // Pointer for directory entry 
+  
+    // opendir() returns a pointer of DIR type.  
+    DIR *dr = opendir("."); 
+  
+    if (dr == NULL)  // opendir returns NULL if couldn't open directory 
+    { 
+        printf("Could not open current directory" ); 
+        return 0; 
+    } 
+  
+    // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html for readdir() 
+    while ((de = readdir(dr)) != NULL) 
+        if(strcmp(de->d_name, filename) == 0){
+            closedir(dr);
+            return 0;
+        } 
+  
+    closedir(dr);     
+    return -1; 
+}
+
+// adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
 // Pre: needs a large string to save directory contents into
 // Post: directory contents are saved to the provided string, ignoring "." and "..", delimited with "\n"
 void printDirectoryContentsToString(char contents[])
@@ -124,7 +151,7 @@ void sendFile(char *commands[])
     long int fileSize;
     char *buffer;
     
-    setupClientConnection(commands[4], commands[1], &dataConnectionFD);
+    setupClientConnection(commands[4], commands[2], &dataConnectionFD);
 
     file = fopen(commands[1], "r"); //open the file read-only
 
@@ -137,29 +164,34 @@ void sendFile(char *commands[])
     buffer = malloc(sizeof(char) * (fileSize + 1));
 
     //read file into buffer and close the file
-    //fgets(buffer, sizeof(buffer), file);
     bytesRead = fread(buffer, sizeof(char), fileSize, file);
     fclose(file);
+    strcat(buffer, "\0"); //append EOF to end of buffer
 
-    //send the file, need more error checking here
-    printf("File contents: %s\n", buffer);
-    printf("File sending\n");
-    bytesSent = send(dataConnectionFD, buffer, strlen(buffer), 0);
-
-    // while (fileSize > 0)
-    // {
-    //     bytesSent = send(dataConnectionFD, buffer, strlen(buffer), 0);
-    //     if (bytesSent < 0)
-    //     {
-    //         fprintf(stderr, "Error in writing\n");
-    //         return;
-    //     }
-    //     fileSize -= bytesSent;
-    // }
+    //ensure we send all of any large files
+    while (fileSize > 0)
+    {
+        bytesSent = send(dataConnectionFD, buffer, strlen(buffer), 0);
+        if (bytesSent < 0)
+        {
+            fprintf(stderr, "Error in writing\n");
+            return;
+        }
+        fileSize -= bytesSent;
+    }
 
     printf("File sent\n");
     close(dataConnectionFD);
     free(buffer);
+}
+// opens connection to remote, sends error message, and closes connection
+void sendError(char * host, char * port, char errorCode[]){
+    int dataConnectionFD;
+    char *errorMessage = errorCode;
+
+    setupClientConnection(host, port, &dataConnectionFD);
+    send(dataConnectionFD, errorMessage, strlen(errorMessage), 0);
+    close(dataConnectionFD);
 }
 
 void handleRequest(int controlConnectionFD, char *clientHost)
@@ -195,16 +227,20 @@ void handleRequest(int controlConnectionFD, char *clientHost)
     { //commands should be "-g <filename> <port>"
         printf("File \"%s\" requested on port %s\n", commands[1], commands[2]);
 
-        /* Check directory for file here */
-        //if not found, error
-
-        //else
-        printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
-        sendFile(commands);
+        //returns 0 if file found, -1 if not found
+        if(serachDirectoryForFile(commands[1]) == -1){
+            printf("File not found. Sending error message to %s:%s\n", commands[4], commands[2]);
+            sendError(commands[4], commands[2], "-1");
+        }
+        else{
+            printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
+            sendFile(commands);
+        }
     }
     else
     {
-        //error
+        printf("Command not recognized. Sending error message to %s:%s\n", commands[4], commands[1]);
+        sendError(commands[4], commands[1], "-2");
     }
     close(controlConnectionFD);
 }

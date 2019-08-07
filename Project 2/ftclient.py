@@ -58,19 +58,19 @@ def connectToServer():
 def recieveMessage():
     data = connection.recv(1024)
 
-    sys.stdout.write(data)
+    if (data == "-1"):
+        print(sys.argv[1] + ":" + sys.argv[2] + "says: " + "\nError: File not found\n")
+    elif (data == "-2"):
+        print(sys.argv[1] + ":" + sys.argv[2] + "says: " + "\nError: Command not recognized\n")
+    elif(len(sys.argv) == 5): #-l
+        sys.stdout.write(data) # remove trailing newline
+    else: #-d
+        print("Receiving file data")
 
-    # if (data == -1):
-    #     print(sys.argv[1] + ":" + sys.argv[2] + "says:" + "\nError: File not found")
-    # elif(len(sys.argv) == 5): #-l
-    #     sys.stdout.write(data) # remove trailing newline
-    # else: #-d
-    #     print("Receiving file data")
-
-    #     f = open("file.txt","w") #open in binary
-    #     while (data):
-    #             f.write(data)
-    #             data = connection.recv(1024)
+        f = open("file.txt","w") #open in binary
+        while (data):
+                f.write(data)
+                data = connection.recv(1024)
     return data
 
 ####################
