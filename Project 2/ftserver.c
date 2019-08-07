@@ -9,55 +9,69 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h> //For Sockets
+#include <sys/stat.h>   //for file controls
+#include <fcntl.h>      //for file controls
 #include <netdb.h>
 #include <stdlib.h>
 #include <netinet/in.h> //For the AF_INET (Address Family)
-#include <dirent.h> //for directory listing
+#include <dirent.h>     //for directory listing
 
-void setupServer(int * fd, char * port){
+// Pre: needs a file descriptor and a port number to bind to
+// Post: listening on provided port
+// The following function is taken mostly directly from Beej's guide
+void setupServer(int *fd, char *port)
+{
 
-    //the following function is taken mostly directly from Beej's guide:
     struct addrinfo hints;
     struct addrinfo *res;
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+    hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6, whichever
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
-    
-    
+    hints.ai_flags = AI_PASSIVE; // fill in my IP for me
+
     getaddrinfo(NULL, port, &hints, &res);
 
     *fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if(*fd < 0){
+    if (*fd < 0)
+    {
         fprintf(stderr, "could not create socket");
         exit(1);
     }
-    if(bind(*fd, res->ai_addr, res->ai_addrlen) < 0){
+    if (bind(*fd, res->ai_addr, res->ai_addrlen) < 0)
+    {
         fprintf(stderr, "could not bind");
         exit(1);
     }
-    if(listen(*fd, 1) < 0){
+    if (listen(*fd, 1) < 0)
+    {
         fprintf(stderr, "could not listen");
-		exit(1);
+        exit(1);
     }
 }
+// connects to remote server as client, adapted from the previous project
+// Pre: needs a hostname, port, and file descriptor for a remote server
+// Post: connected to remote server
+void setupClientConnection(char *host, char *port, int *fd)
+{
 
-void setupClientConnection (int argc, char *argv[], int * fd){
     struct sockaddr_in chatServer; //main socket to store server details
 
     //create an create an AF_INET (IPv4), STREAM socket (TCP)
-    *fd = socket(AF_INET, SOCK_STREAM, 0); 
+    *fd = socket(AF_INET, SOCK_STREAM, 0);
 
     chatServer.sin_family = AF_INET;
-    chatServer.sin_port = htons(atoi(argv[2])); //user specified port
+    chatServer.sin_port = htons(atoi(port)); //user specified port
 
-    inet_pton(AF_INET, argv[1], &chatServer.sin_addr); //user specified host name
+    inet_pton(AF_INET, host, &chatServer.sin_addr); //user specified host name
     connect(*fd, (struct sockaddr *)&chatServer, sizeof(chatServer));
 }
 
 // adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
-void printDirectoryContentsToString(char contents[]){
+// Pre: needs a large string to save directory contents into
+// Post: directory contents are saved to the provided string, ignoring "." and "..", delimited with "\n"
+void printDirectoryContentsToString(char contents[])
+{
     struct dirent *de; // Pointer for directory entry
     char name[64];
 
@@ -73,7 +87,7 @@ void printDirectoryContentsToString(char contents[]){
     // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html for readdir()
     while ((de = readdir(dr)) != NULL)
     {
-        if(!(strcmp(de->d_name, "..") == 0 || strcmp(de->d_name, ".") == 0))
+        if (!(strcmp(de->d_name, "..") == 0 || strcmp(de->d_name, ".") == 0))
         {
             sprintf(name, "%s\n", de->d_name);
             strcat(contents, name);
@@ -83,27 +97,77 @@ void printDirectoryContentsToString(char contents[]){
 
     closedir(dr);
 }
+// sends contents of current directory as a \n delimited string to remote host, then closes the connection
+// Pre: needs a string array with remote host in array[4] and remote port in array[1]
+// Post: string of directory contents sent to remote
+void sendDirectoryContents(char *commands[])
+{
+    int dataConnectionFD, bytesSent;
+    char contents[1000]; //to store filenames in current directory
 
-void sendDirectoryContents(){
-    char contents[1000];
     memset(contents, '\0', sizeof(contents));
-    int bytesSent, messageLength;
+    printDirectoryContentsToString(contents); //store filenames in current directory
 
-    printDirectoryContentsToString(contents);
-    messageLength = strlen(contents);
+    setupClientConnection(commands[4], commands[1], &dataConnectionFD);
 
-    //bytesSent = send(, contents, messageLength, 0);
-
+    bytesSent = send(dataConnectionFD, contents, strlen(contents), 0);
+    close(dataConnectionFD);
 }
 
-void handleRequest(int controlConnectionFD, char * clientHost){
-    int dataConnectionFD;
-    struct sockaddr_storage dataAddress;
-    socklen_t dataAdrSize;
+// Opens connection to remote, sends a file as a stream, then closes connection
+// Pre: file must exist in current directory
+// Post: file is sent as stream to remote
+void sendFile(char *commands[])
+{
+    int dataConnectionFD, bytesRead, bytesSent;
+    FILE *file;
+    long int fileSize;
+    char *buffer;
+    
+    setupClientConnection(commands[4], commands[1], &dataConnectionFD);
+
+    file = fopen(commands[1], "r"); //open the file read-only
+
+    //find file size, reference: https://stackoverflow.com/a/238609
+    fseek(file, 0, SEEK_END); // seek to end of file
+    fileSize = ftell(file);   // get current file pointer
+    rewind(file);             // seek back to beginning of file
+
+    //create buffer to hold file
+    buffer = malloc(sizeof(char) * (fileSize + 1));
+
+    //read file into buffer and close the file
+    //fgets(buffer, sizeof(buffer), file);
+    bytesRead = fread(buffer, sizeof(char), fileSize, file);
+    fclose(file);
+
+    //send the file, need more error checking here
+    printf("File contents: %s\n", buffer);
+    printf("File sending\n");
+    bytesSent = send(dataConnectionFD, buffer, strlen(buffer), 0);
+
+    // while (fileSize > 0)
+    // {
+    //     bytesSent = send(dataConnectionFD, buffer, strlen(buffer), 0);
+    //     if (bytesSent < 0)
+    //     {
+    //         fprintf(stderr, "Error in writing\n");
+    //         return;
+    //     }
+    //     fileSize -= bytesSent;
+    // }
+
+    printf("File sent\n");
+    close(dataConnectionFD);
+    free(buffer);
+}
+
+void handleRequest(int controlConnectionFD, char *clientHost)
+{
     char buffer[1028];
-    char * commands[5]; //used to store commands from client. There should be a max of 3, but added extra just to be safe
+    char *commands[5]; //used to store commands from client. There should be a max of 3, but added extra just to be safe
     int numCommands = 0;
-    char * token;
+    char *token;
 
     memset(buffer, '\0', sizeof(buffer));
 
@@ -121,48 +185,56 @@ void handleRequest(int controlConnectionFD, char * clientHost){
     }
     commands[4] = clientHost; //add hostname to last place in commands array
 
-    if(strcmp(commands[0], "-l") == 0){
-        // printf("List directory requested on port %d", clientPort);
-        // printf("Sending directory contents to %s:%d", clientHost, clientPort);
-        //commands should be "-l <port>"
+    if (strcmp(commands[0], "-l") == 0)
+    { //commands should be "-l <port>"
+        printf("List directory requested on port %s\n", commands[1]);
         printf("Sending directory contents to %s:%s\n", commands[4], commands[1]);
-        sendDirectoryContents();
+        sendDirectoryContents(commands);
     }
-    else if(strcmp(commands[0], "-g")==0){
-        strcpy(clientPort, commands[2]); //commands should be "-g <filename> <port>"
-        //send file
+    else if (strcmp(commands[0], "-g") == 0)
+    { //commands should be "-g <filename> <port>"
+        printf("File \"%s\" requested on port %s\n", commands[1], commands[2]);
+
+        /* Check directory for file here */
+        //if not found, error
+
+        //else
+        printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
+        sendFile(commands);
     }
-    else{
+    else
+    {
         //error
     }
-    close(dataConnectionFD);
     close(controlConnectionFD);
 }
 
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[])
+{
 
-    int serverFD, controlConnectionFD; //file descriptor that is used to idenfiy the socket
+    int serverFD, controlConnectionFD;      //file descriptor that is used to idenfiy the socket
     struct sockaddr_storage controlAddress; //for storing connection info
     socklen_t ctrlAdrSize;
     char clientHost[128];
     char clientPort[16];
     char *token;
 
-
-	if(argc != 2) {
-		fprintf(stderr, "Usage: $ /ftserver <port>\n");
-		exit(1);
-	}
+    if (argc != 2)
+    {
+        fprintf(stderr, "Usage: $ /ftserver <port>\n");
+        exit(1);
+    }
 
     setupServer(&serverFD, argv[1]);
     printf("Server open on port %s\n", argv[1]);
 
     //main server loop
-    while(1){
+    while (1)
+    {
         //accept connection
         ctrlAdrSize = sizeof(controlAddress);
         controlConnectionFD = accept(serverFD, (struct sockaddr *)&controlAddress, &ctrlAdrSize);
-        
+
         //extract & print the hostname
         getnameinfo((struct sockaddr *)&controlAddress, ctrlAdrSize, clientHost, 128, clientPort, 16, 0);
         token = strtok(clientHost, ".");

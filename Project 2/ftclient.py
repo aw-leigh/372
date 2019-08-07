@@ -51,7 +51,28 @@ def connectToServer():
     s.connect((remote_ip , port))
 
     return s
-    
+
+# Recieves message from remote host
+# Pre: Must have connection with remote host
+# Post: Message from remote host is printed to stdout
+def recieveMessage():
+    data = connection.recv(1024)
+
+    sys.stdout.write(data)
+
+    # if (data == -1):
+    #     print(sys.argv[1] + ":" + sys.argv[2] + "says:" + "\nError: File not found")
+    # elif(len(sys.argv) == 5): #-l
+    #     sys.stdout.write(data) # remove trailing newline
+    # else: #-d
+    #     print("Receiving file data")
+
+    #     f = open("file.txt","w") #open in binary
+    #     while (data):
+    #             f.write(data)
+    #             data = connection.recv(1024)
+    return data
+
 ####################
 ### MAIN PROGRAM ###
 ####################
@@ -65,23 +86,21 @@ dataSocket = setupDataPort()
 serverSocket = connectToServer()
 
 # send request to server
-if(len(sys.argv) == 5):
+if(len(sys.argv) == 5): #-l
     message = sys.argv[3] + " " + sys.argv[4]
-else:
+else: #-g
     message = sys.argv[3] + " " + sys.argv[4] + " " + sys.argv[5]
 
 serverSocket.sendall(message)
 
-#setup data port to revieve reply
+# setup data port to revieve reply
 while True:
     dataSocket.listen(1)  # listen for 1 processes at a time only
     connection, address = dataSocket.accept()
 
-    while True:
-        data = recieveMessage()
-    
-    print(data)
+    recieveMessage()
     connection.close()
+    break
 
 serverSocket.close()
 dataSocket.close()
