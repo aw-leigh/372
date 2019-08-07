@@ -67,32 +67,6 @@ void setupClientConnection(char *host, char *port, int *fd)
     connect(*fd, (struct sockaddr *)&chatServer, sizeof(chatServer));
 }
 
-// adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
-// Pre: needs a string with filename with extension
-// Post: returns 0 if file is found in current directory, -1 if not
-int serachDirectoryForFile(char* filename){
-
-    struct dirent *de;  // Pointer for directory entry 
-  
-    // opendir() returns a pointer of DIR type.  
-    DIR *dr = opendir("."); 
-  
-    if (dr == NULL)  // opendir returns NULL if couldn't open directory 
-    { 
-        printf("Could not open current directory" ); 
-        return 0; 
-    } 
-  
-    // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html for readdir() 
-    while ((de = readdir(dr)) != NULL) 
-        if(strcmp(de->d_name, filename) == 0){
-            closedir(dr);
-            return 0;
-        } 
-  
-    closedir(dr);     
-    return -1; 
-}
 
 // adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
 // Pre: needs a large string to save directory contents into
@@ -184,15 +158,6 @@ void sendFile(char *commands[])
     close(dataConnectionFD);
     free(buffer);
 }
-// opens connection to remote, sends error message, and closes connection
-void sendError(char * host, char * port, char errorCode[]){
-    int dataConnectionFD;
-    char *errorMessage = errorCode;
-
-    setupClientConnection(host, port, &dataConnectionFD);
-    send(dataConnectionFD, errorMessage, strlen(errorMessage), 0);
-    close(dataConnectionFD);
-}
 
 void handleRequest(int controlConnectionFD, char *clientHost)
 {
@@ -227,20 +192,16 @@ void handleRequest(int controlConnectionFD, char *clientHost)
     { //commands should be "-g <filename> <port>"
         printf("File \"%s\" requested on port %s\n", commands[1], commands[2]);
 
-        //returns 0 if file found, -1 if not found
-        if(serachDirectoryForFile(commands[1]) == -1){
-            printf("File not found. Sending error message to %s:%s\n", commands[4], commands[2]);
-            sendError(commands[4], commands[2], "-1");
-        }
-        else{
-            printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
-            sendFile(commands);
-        }
+        /* Check directory for file here */
+        //if not found, error
+
+        //else
+        printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
+        sendFile(commands);
     }
     else
     {
-        printf("Command not recognized. Sending error message to %s:%s\n", commands[4], commands[1]);
-        sendError(commands[4], commands[1], "-2");
+        //error
     }
     close(controlConnectionFD);
 }
