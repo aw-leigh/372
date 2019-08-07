@@ -95,9 +95,36 @@ void printDirectoryContentsToString(char contents[])
         }
     }
     //printf("%s", contents);
-
     closedir(dr);
 }
+
+// adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
+// Pre: needs a string with filename with extension
+// Post: returns 0 if file is found in current directory, -1 if not
+int searchDirectoryForFile(char* filename){
+
+    struct dirent *de;  // Pointer for directory entry 
+  
+    // opendir() returns a pointer of DIR type.  
+    DIR *dr = opendir("."); 
+  
+    if (dr == NULL)  // opendir returns NULL if couldn't open directory 
+    { 
+        printf("Could not open current directory" ); 
+        return 0; 
+    } 
+  
+    // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html for readdir() 
+    while ((de = readdir(dr)) != NULL) 
+        if(strcmp(de->d_name, filename) == 0){
+            closedir(dr);
+            return 0;
+        } 
+  
+    closedir(dr);     
+    return -1; 
+}
+
 // sends contents of current directory as a \n delimited string to remote host, then closes the connection
 // Pre: needs a string array with remote host in array[4] and remote port in array[1]
 // Post: string of directory contents sent to remote
@@ -192,12 +219,14 @@ void handleRequest(int controlConnectionFD, char *clientHost)
     { //commands should be "-g <filename> <port>"
         printf("File \"%s\" requested on port %s\n", commands[1], commands[2]);
 
-        /* Check directory for file here */
-        //if not found, error
-
-        //else
-        printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
-        sendFile(commands);
+        //returns 0 if file found, -1 if not found
+        // if(searchDirectoryForFile(commands[1]) == -1){
+        //     printf("file not found");
+        // }
+        // else{
+            printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
+            sendFile(commands);
+        // }
     }
     else
     {
