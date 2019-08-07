@@ -67,7 +67,6 @@ void setupClientConnection(char *host, char *port, int *fd)
     connect(*fd, (struct sockaddr *)&chatServer, sizeof(chatServer));
 }
 
-
 // adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
 // Pre: needs a large string to save directory contents into
 // Post: directory contents are saved to the provided string, ignoring "." and "..", delimited with "\n"
@@ -98,47 +97,16 @@ void printDirectoryContentsToString(char contents[])
     closedir(dr);
 }
 
-// adapted from: https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
-// Pre: needs a string with filename with extension
-// Post: returns 0 if file is found in current directory, -1 if not
-int searchDirectoryForFile(char* filename){
-
-    struct dirent *de;  // Pointer for directory entry 
-  
-    // opendir() returns a pointer of DIR type.  
-    DIR *dr = opendir("."); 
-  
-    if (dr == NULL)  // opendir returns NULL if couldn't open directory 
-    { 
-        printf("Could not open current directory" ); 
-        return 0; 
-    } 
-  
-    // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html for readdir() 
-    while ((de = readdir(dr)) != NULL) 
-        if(strcmp(de->d_name, filename) == 0){
-            closedir(dr);
-            return 0;
-        } 
-  
-    closedir(dr);     
-    return -1; 
-}
-
 // sends contents of current directory as a \n delimited string to remote host, then closes the connection
 // Pre: needs a string array with remote host in array[4] and remote port in array[1]
 // Post: string of directory contents sent to remote
-void sendDirectoryContents(char *commands[])
+void sendDirectoryContents(char *commands[], char directoryContents[])
 {
     int dataConnectionFD, bytesSent;
-    char contents[1000]; //to store filenames in current directory
-
-    memset(contents, '\0', sizeof(contents));
-    printDirectoryContentsToString(contents); //store filenames in current directory
 
     setupClientConnection(commands[4], commands[1], &dataConnectionFD);
 
-    bytesSent = send(dataConnectionFD, contents, strlen(contents), 0);
+    bytesSent = send(dataConnectionFD, directoryContents, strlen(directoryContents), 0);
     close(dataConnectionFD);
 }
 
@@ -151,7 +119,7 @@ void sendFile(char *commands[])
     FILE *file;
     long int fileSize;
     char *buffer;
-    
+
     setupClientConnection(commands[4], commands[2], &dataConnectionFD);
 
     file = fopen(commands[1], "r"); //open the file read-only
@@ -186,7 +154,17 @@ void sendFile(char *commands[])
     free(buffer);
 }
 
-void handleRequest(int controlConnectionFD, char *clientHost)
+// opens connection to remote, sends error message, and closes connection
+void sendError(char * host, char * port, char errorCode[]){
+    int dataConnectionFD;
+    char *errorMessage = errorCode;
+
+    setupClientConnection(host, port, &dataConnectionFD);
+    send(dataConnectionFD, errorMessage, strlen(errorMessage), 0);
+    close(dataConnectionFD);
+}
+
+void handleRequest(int controlConnectionFD, char *clientHost, char directoryContents[])
 {
     char buffer[1028];
     char *commands[5]; //used to store commands from client. There should be a max of 3, but added extra just to be safe
@@ -213,24 +191,27 @@ void handleRequest(int controlConnectionFD, char *clientHost)
     { //commands should be "-l <port>"
         printf("List directory requested on port %s\n", commands[1]);
         printf("Sending directory contents to %s:%s\n", commands[4], commands[1]);
-        sendDirectoryContents(commands);
+        sendDirectoryContents(commands, directoryContents);
     }
     else if (strcmp(commands[0], "-g") == 0)
     { //commands should be "-g <filename> <port>"
         printf("File \"%s\" requested on port %s\n", commands[1], commands[2]);
 
-        //returns 0 if file found, -1 if not found
-        // if(searchDirectoryForFile(commands[1]) == -1){
-        //     printf("file not found");
-        // }
-        // else{
+        // returns NULL if substring isn't found
+        if (strstr(directoryContents, commands[1]) == NULL)
+        {
+            printf("File not found\n");
+            sendError(commands[4], commands[2], "-1");
+        }
+        else
+        {
             printf("Sending \"%s\" to %s:%s\n", commands[1], commands[4], commands[2]);
             sendFile(commands);
-        // }
+        }
     }
     else
     {
-        //error
+        sendError(commands[4], commands[2], "-2");
     }
     close(controlConnectionFD);
 }
@@ -243,6 +224,7 @@ int main(int argc, char *argv[])
     socklen_t ctrlAdrSize;
     char clientHost[128];
     char clientPort[16];
+    char directoryContents[1000]; //to store filenames in current directory
     char *token;
 
     if (argc != 2)
@@ -253,6 +235,11 @@ int main(int argc, char *argv[])
 
     setupServer(&serverFD, argv[1]);
     printf("Server open on port %s\n", argv[1]);
+
+    // this used to be a subfunction of handleRequest, but it was causing file transfers to hang for some reason
+    // everything works when it's in main, so in main it will remain
+    memset(directoryContents, '\0', sizeof(directoryContents));
+    printDirectoryContentsToString(directoryContents);
 
     //main server loop
     while (1)
@@ -267,6 +254,6 @@ int main(int argc, char *argv[])
         strcpy(clientHost, token);
         printf("Connection from %s\n", clientHost);
 
-        handleRequest(controlConnectionFD, clientHost);
+        handleRequest(controlConnectionFD, clientHost, directoryContents);
     }
 }
