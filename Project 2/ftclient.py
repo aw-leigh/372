@@ -86,7 +86,7 @@ def recieveData():
     else: #-d
         print("Receiving file data") # save file
 
-        f = open("file.txt","w")
+        f = open(sys.argv[4],"w")
         while (data):
                 f.write(data)
                 data = connection.recv(1024)
